@@ -4,8 +4,8 @@ import React, { useState } from "react";
 
 export default function PostPredictionPage() {
   const [textInput, setTextInput] = useState("");
-  const [category, setCategory] = useState("A Levels");
-  const [predictedCategory, setPredictedCategory] = useState<string | null>(null);
+  const [postTitle, setPostTitle] = useState(""); // State for post title
+  const [category, setCategory] = useState("A Level");
   const [llmResponse, setLlmResponse] = useState<string | null>(null);
   const [analysisResult, setAnalysisResult] = useState<Record<string, any> | null>(null);
 
@@ -26,8 +26,32 @@ export default function PostPredictionPage() {
 
       if (response.ok) {
         const data = await response.json();
-        setPredictedCategory(category); // Use the selected category as the predicted one
-        setAnalysisResult(data.result); // Display the structured output
+        const { ridiculous, leaks_pii, relevant_to_category } = data.result;
+        if (!ridiculous && !leaks_pii && relevant_to_category) {
+          // Call the second API and set analysis result
+          const predictionResponse = await fetch("https://post-validation-78306345447.asia-southeast1.run.app/predict", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              post_content: textInput,
+              post_title: postTitle, // Send the post title
+              category,
+            }),
+          });
+
+          if (predictionResponse.ok) {
+            const predictionData = await predictionResponse.json();
+            setAnalysisResult(predictionData); // Set the analysis result from the prediction API
+          } else {
+            const error = await predictionResponse.json();
+            console.error("Error with prediction:", error.error);
+            setLlmResponse(`Error with prediction: ${error.error}`);
+          }
+        } else {
+          setAnalysisResult(null);
+        }
         setLlmResponse(data.response); // Display the LLM response
       } else {
         const error = await response.json();
@@ -42,10 +66,16 @@ export default function PostPredictionPage() {
 
   return (
     <div className="min-h-screen bg-gray-900 text-white p-4">
+      {/* Title Section */}
+      <div className="text-center py-8 bg-gray-800 rounded-xl shadow-lg mb-8">
+        <h1 className="text-3xl font-bold">Post Prediction and Analysis</h1>
+        <p className="mt-2 text-lg">Enter post content and title to predict category and analyze its validity</p>
+      </div>
+
       <div className="flex flex-col md:flex-row gap-8">
         {/* Left Section */}
         <div className="flex-1 bg-gray-800 p-6 rounded-xl shadow-lg">
-          <h1 className="text-2xl font-bold mb-4">Post Prediction</h1>
+          <h2 className="text-2xl font-bold mb-4">Post Prediction</h2>
           <form onSubmit={handlePrediction} className="space-y-4">
             <div>
               <label htmlFor="category-select" className="block text-sm font-medium mb-1">
@@ -57,11 +87,26 @@ export default function PostPredictionPage() {
                 onChange={(e) => setCategory(e.target.value)}
                 className="w-full p-2 rounded-lg bg-gray-700 border border-gray-600"
               >
-                <option value="A Levels">A Levels</option>
+                <option value="A Level">A Level</option>
                 <option value="GCSE">GCSE</option>
                 <option value="Job Experience">Job Experience</option>
-                <option value="Studies">Studies</option>
+                <option value="Study Support">Study Support</option>
               </select>
+            </div>
+
+            <div>
+              <label htmlFor="post-title" className="block text-sm font-medium mb-1">
+                Enter Post Title
+              </label>
+              <input
+                type="text"
+                id="post-title"
+                value={postTitle}
+                onChange={(e) => setPostTitle(e.target.value)}
+                placeholder="Enter your post title here"
+                required
+                className="w-full p-2 rounded-lg bg-gray-700 border border-gray-600"
+              />
             </div>
 
             <div>
@@ -85,13 +130,6 @@ export default function PostPredictionPage() {
               Validate Post
             </button>
           </form>
-
-          {predictedCategory && (
-            <div className="mt-6 bg-gray-700 p-4 rounded-lg">
-              <h2 className="text-lg font-semibold">Selected Category:</h2>
-              <p>{predictedCategory}</p>
-            </div>
-          )}
         </div>
 
         {/* Right Section */}
